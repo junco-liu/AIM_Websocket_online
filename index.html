@@ -400,14 +400,7 @@ details.log[open] summary .icon { transform: rotate(90deg); }
 
 <div class="alert" id="alert" role="alert">
   <svg><use href="#i-warn"/></svg>
-  <div>
-    <b>当前是 HTTPS 页面，浏览器会拦截到机器人的明文连接。</b>
-    <ol>
-      <li>点击地址栏左侧的图标 → <code>网站设置</code></li>
-      <li>找到 <code>不安全内容</code>，改为 <code>允许</code></li>
-      <li>刷新本页</li>
-    </ol>
-  </div>
+  <div id="alertBody"></div>
 </div>
 
 <main>
@@ -579,7 +572,7 @@ function connect() {
       placeholder('连接已中断', `与 ${host} 的连接断开了。点「连接」重试。`);
     } else {
       log(`无法连接 ${host} —— 确认 IP 正确、机器人已唤醒、本设备与它在同一局域网` +
-          (location.protocol === 'https:' ? '；本页是 HTTPS，还需在站点设置里允许「不安全内容」' : ''), true);
+          (isSecure ? '。若浏览器弹出「访问本地网络设备」授权框，请点允许' : ''), true);
       placeholder('无法连接', `连不上 ${host}。检查 IP 与局域网，或按电源键唤醒机器人。`);
     }
   };
@@ -690,7 +683,22 @@ addEventListener('keyup', ev => {
 });
 addEventListener('blur', () => { if (held) { held = null; quiet(halt()); } });
 
-if (location.protocol === 'https:') $('alert').classList.add('show');
+/* Chrome 147+ gates local-network access (including WebSockets) behind a permission that is
+   only granted to secure contexts. A plain-HTTP page on a public domain can never obtain it,
+   so that origin can never reach the robot — no user action helps. Loopback and LAN origins
+   are not restricted at all. */
+const LAN = /^(localhost|127\.|\[?::1\]?|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.local$/i;
+const isSecure = window.isSecureContext;
+const originIsLocal = LAN.test(location.hostname) || location.protocol === 'file:';
+
+if (!isSecure && !originIsLocal) {
+  $('alertBody').innerHTML =
+    '<b>此页面通过明文 HTTP 从公网域名打开，Chrome 会拒绝它连接局域网设备。</b>' +
+    '<ol><li>改用 <code>https://</code> 打开本页，连接时在弹出的「访问本地网络设备」中点<b>允许</b></li>' +
+    '<li>或把本页放在局域网内提供服务（如 <code>http://192.168.x.x:8099</code>）</li>' +
+    '<li>或下载 index.html 本地双击打开</li></ol>';
+  $('alert').classList.add('show');
+}
 
 /* ?selftest=1 — the robot's listener backlog is small, so a leaked socket per retry bricks it.
    Stubs WebSocket and asserts retries don't stack and a drop closes everything. */
