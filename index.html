@@ -312,10 +312,13 @@ details.log[open] summary .icon { transform: rotate(90deg); }
   .shoulder { display: none; }                    /* … the pad's centre stop carries it */
   .cols { grid-template-columns: 1fr; }
   header { gap: var(--s3); padding: var(--s3) var(--s4) 10px; }
+  .readout { order: 2; gap: var(--s4); }
   .field { order: 3; width: 100%; }
   .field #ip { flex: 1; width: auto; }
-  body.live .field { width: auto; }
-  .readout { order: 2; gap: var(--s4); }
+  /* Connected, only 断开 is left. At order 3 it landed after the readout and took a
+     whole row to itself; a lone small button belongs on the title line. */
+  body.live .field { order: 1; width: auto; margin-left: auto; }
+  body.live .readout { order: 2; width: 100%; margin-left: 0; }
   .plateWrap { padding: var(--s4) var(--s4) 0; }
   .rail { border-left: 0; padding: 0 var(--s4) var(--s4); }
   .grp.drive { order: -1; }                       /* driving first, in thumb reach */
