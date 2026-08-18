@@ -502,7 +502,7 @@ function log(msg, isErr) {
 
 function placeholder(title, hint) { $('phTitle').textContent = title; $('phHint').textContent = hint; }
 
-let cmdWs, imgWs, statusWs, lastUrl, statusTimer;
+let cmdWs, imgWs, statusWs, lastUrl, statusTimer, connectTimer, everOpen;
 const pending = [];   // ws_cmd is strictly request/response — replies arrive in send order
 
 function send(obj) {
@@ -527,9 +527,21 @@ function connect() {
   const host = $('ip').value.trim();
   if (!host) { log('请输入机器人 IP 地址', true); $('ip').focus(); return; }
 
+  closeAll();                       // never stack sockets on top of a previous attempt
+  everOpen = false;
   setState('busy', '连接中…');
   placeholder('正在连接…', `尝试 ws://${host}`);
   log(`连接 ${host}`);
+
+  // an unreachable host leaves the socket in CONNECTING for a minute or more — fail fast instead
+  connectTimer = setTimeout(() => {
+    if (everOpen) return;
+    log(`${host} 无响应 —— 机器人可能已休眠、断开局域网，或 IP 变了。` +
+        `按一下机器人电源键唤醒后重试。`, true);
+    teardown();
+    setState(null, '未连接');
+    placeholder('连接超时', `${host} 没有响应。确认机器人已唤醒且与本设备在同一局域网。`);
+  }, 8000);
 
   cmdWs = new WebSocket(`ws://${host}/ws_cmd`);
   cmdWs.binaryType = 'arraybuffer';
@@ -543,24 +555,33 @@ function connect() {
   };
 
   cmdWs.onopen = async () => {
+    everOpen = true;
+    clearTimeout(connectTimer);
     $('hostLabel').textContent = host;
     setState('live', '已连接');
     placeholder('画面未开启', '点击右侧「开启」查看机器人摄像头实时画面。');
     log('已连接，初始化程序');
+    const sock = cmdWs;
     await send({ cmd_id: 'program_init' }).catch(() => {});
+    if (cmdWs !== sock) return;   // link dropped while we awaited — don't open a stray status socket
     openStatus(host);
   };
 
-  cmdWs.onerror = () => log(
-    `无法连接 ${host} —— 检查 IP 是否正确、设备是否与机器人在同一局域网` +
-    (location.protocol === 'https:' ? '，以及本页的「不安全内容」是否已允许' : ''), true);
+  cmdWs.onerror = () => {};   // the close handler below reports; onerror carries no detail
 
   cmdWs.onclose = () => {
     pending.splice(0).forEach(p => p.rej(new Error('连接已关闭')));
+    const dropped = everOpen;
     teardown();
     setState(null, '未连接');
-    placeholder('尚未连接机器人', '确认设备与机器人在同一局域网，输入 IP 后点击「连接」。');
-    log('已断开');
+    if (dropped) {
+      log('连接中断 —— 机器人主动断开或离开了局域网', true);
+      placeholder('连接已中断', `与 ${host} 的连接断开了。点「连接」重试。`);
+    } else {
+      log(`无法连接 ${host} —— 确认 IP 正确、机器人已唤醒、本设备与它在同一局域网` +
+          (location.protocol === 'https:' ? '；本页是 HTTPS，还需在站点设置里允许「不安全内容」' : ''), true);
+      placeholder('无法连接', `连不上 ${host}。检查 IP 与局域网，或按电源键唤醒机器人。`);
+    }
   };
 
   imgWs = new WebSocket(`ws://${host}/ws_img`);
@@ -590,8 +611,19 @@ function openStatus(host) {
   };
 }
 
-function teardown() {
+function closeAll() {
   clearInterval(statusTimer);
+  clearTimeout(connectTimer);
+  for (const w of [cmdWs, imgWs, statusWs]) {
+    if (!w) continue;
+    w.onopen = w.onclose = w.onerror = w.onmessage = null;   // detach so we don't re-enter teardown
+    if (w.readyState <= WebSocket.OPEN) w.close();
+  }
+  cmdWs = imgWs = statusWs = null;
+}
+
+function teardown() {
+  closeAll();
   body.classList.remove('streaming');
   if (lastUrl) { URL.revokeObjectURL(lastUrl); lastUrl = null; }
   $('view').removeAttribute('src');
@@ -659,5 +691,39 @@ addEventListener('keyup', ev => {
 addEventListener('blur', () => { if (held) { held = null; quiet(halt()); } });
 
 if (location.protocol === 'https:') $('alert').classList.add('show');
+
+/* ?selftest=1 — the robot's listener backlog is small, so a leaked socket per retry bricks it.
+   Stubs WebSocket and asserts retries don't stack and a drop closes everything. */
+if (new URLSearchParams(location.search).has('selftest')) {
+  const made = [], Real = WebSocket;
+  window.WebSocket = function (url) {
+    const o = { url, readyState: 0, close() { this.readyState = 3; }, send() {},
+                onopen: null, onclose: null, onerror: null, onmessage: null, binaryType: '' };
+    made.push(o); return o;
+  };
+  // these are non-enumerable statics — Object.assign would silently skip them
+  Object.assign(window.WebSocket, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+  const live = () => made.filter(o => o.readyState <= 1).length;
+
+  $('ip').value = '10.0.0.1';
+  connect(); connect(); connect();
+  console.assert(live() <= 3, `retries stacked sockets: ${live()} live after 3 attempts`);
+
+  const afterRetries = live();
+
+  const cmd = made[made.length - 2];
+  cmd.readyState = 1; cmd.onopen();
+  cmd.readyState = 3; cmd.onclose({});
+  const afterDrop = live();
+
+  window.WebSocket = Real;
+  teardown(); setState(null, '未连接');
+
+  const ok = afterRetries <= 2 && afterDrop === 0;
+  const msg = `自检 ${ok ? '通过' : '失败'}：3 次重试后存活 ${afterRetries} 个（应 ≤2），` +
+              `断线后存活 ${afterDrop} 个（应 0）`;
+  log(msg, !ok);
+  (ok ? console.log : console.error)(msg);
+}
 </script>
 </html>
