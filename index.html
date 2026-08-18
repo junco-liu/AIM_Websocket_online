@@ -271,7 +271,7 @@ body.pristine #phHint { display: none; }
 
 .pad {
   display: grid; grid-template-columns: repeat(3,1fr); gap: 7px;
-  grid-template-areas: ".  up   ." "lf stop rt" "ccw dn cw";
+  grid-template-areas: "ccw up  cw" "lf  stop rt" ".   dn  .";
 }
 .pad .btn { padding: 0; height: var(--tap); }
 [data-go="0"]{grid-area:up} [data-go="180"]{grid-area:dn}
@@ -445,8 +445,7 @@ details.log[open] summary .icon { transform: rotate(90deg); }
           </div>
         </div>
         <p class="figno">
-          按住方向键即走，松开即停。<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 平移 ·
-          <kbd>Q</kbd><kbd>E</kbd> 转向 · <kbd>空格</kbd> 急停。
+          按住方向键即走，松开即停。<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或 <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 平移 · <kbd>Q</kbd><kbd>E</kbd> 转向 · <kbd>空格</kbd> 急停。
         </p>
       </div>
 
@@ -454,13 +453,13 @@ details.log[open] summary .icon { transform: rotate(90deg); }
         <div class="grp drive">
           <h2>移动 <u>DRIVE</u></h2>
           <div class="pad">
+            <button class="btn need" disabled data-spin="-1" aria-label="左转"><svg class="icon" viewBox="0 0 24 24"><use href="#i-ccw"/></svg></button>
             <button class="btn need" disabled data-go="0" aria-label="前进"><svg class="icon" viewBox="0 0 24 24"><use href="#i-arrow"/></svg></button>
+            <button class="btn need" disabled data-spin="1" aria-label="右转"><svg class="icon" viewBox="0 0 24 24"><use href="#i-cw"/></svg></button>
             <button class="btn need" disabled data-go="-90" aria-label="左平移"><svg class="icon" viewBox="0 0 24 24" style="transform:rotate(-90deg)"><use href="#i-arrow"/></svg></button>
             <button class="btn stop need" disabled data-halt aria-label="停止">停</button>
             <button class="btn need" disabled data-go="90" aria-label="右平移"><svg class="icon" viewBox="0 0 24 24" style="transform:rotate(90deg)"><use href="#i-arrow"/></svg></button>
-            <button class="btn need" disabled data-spin="-1" aria-label="左转"><svg class="icon" viewBox="0 0 24 24"><use href="#i-ccw"/></svg></button>
             <button class="btn need" disabled data-go="180" aria-label="后退"><svg class="icon" viewBox="0 0 24 24" style="transform:rotate(180deg)"><use href="#i-arrow"/></svg></button>
-            <button class="btn need" disabled data-spin="1" aria-label="右转"><svg class="icon" viewBox="0 0 24 24"><use href="#i-cw"/></svg></button>
           </div>
           <div class="meter">
             <div class="lab"><label for="speed">移动速度</label><b id="speedv">120 mm/s</b></div>
@@ -471,8 +470,7 @@ details.log[open] summary .icon { transform: rotate(90deg); }
             <input type="range" id="turn" min="20" max="180" step="10" value="120">
           </div>
           <p class="keys">
-            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 平移 ·
-            <kbd>Q</kbd><kbd>E</kbd> 转向 · <kbd>空格</kbd> 急停
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或 <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 平移 · <kbd>Q</kbd><kbd>E</kbd> 转向 · <kbd>空格</kbd> 急停
           </p>
         </div>
 
@@ -735,7 +733,11 @@ document.querySelectorAll('[data-go],[data-spin],[data-halt]').forEach(b => {
   b.addEventListener('pointercancel', () => { if (!b.dataset.halt) quiet(halt()); });
 });
 
-const keys = { w: () => drive(0), s: () => drive(180), a: () => drive(-90), d: () => drive(90),
+// ev.key.toLowerCase() turns 'ArrowUp' into 'arrowup', so both sets share one table
+const keys = { w: () => drive(0),      s: () => drive(180),
+               a: () => drive(-90),    d: () => drive(90),
+               arrowup: () => drive(0), arrowdown: () => drive(180),
+               arrowleft: () => drive(-90), arrowright: () => drive(90),
                q: () => spin(-1), e: () => spin(1), ' ': halt };
 let held = null;
 addEventListener('keydown', ev => {
