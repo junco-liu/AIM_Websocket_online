@@ -26,7 +26,7 @@
 
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px;
   --tap: 40px;
-  --capH: 28px;   /* fixed, so the plate can reserve it exactly */
+  --capH: 32px;   /* fixed, so the plate can reserve it exactly */
   --fast: 130ms cubic-bezier(.2,.8,.3,1);
 
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
@@ -192,6 +192,31 @@ body.streaming .capbar .mark i { animation: tick 1.6s steps(2) infinite; }
 @keyframes tick { 50% { opacity: .3; } }
 .capbar .sp { margin-left: auto; color: #ffffffa8; }
 
+/* The feed switch lives on the caption bar: the control and the state readout
+   are the same object, attached to the picture it governs. Square, because
+   nothing in this world is round — a panel slide switch, not an iOS pill. */
+.camSwitch {
+  display: flex; align-items: center; gap: 7px;
+  height: 100%; padding-left: var(--s1);
+  cursor: pointer; color: inherit; -webkit-tap-highlight-color: transparent;
+}
+.camSwitch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.camSwitch .track {
+  position: relative; width: 34px; height: 18px; flex: none;
+  border: 1px solid currentColor; background: transparent;
+  transition: background var(--fast);
+}
+.camSwitch .knob {
+  position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+  background: currentColor;
+  transition: transform 160ms cubic-bezier(.2,.8,.3,1), background var(--fast);
+}
+.camSwitch input:checked + .track { background: currentColor; }
+.camSwitch input:checked + .track .knob { transform: translateX(16px); background: var(--press); }
+.camSwitch input:disabled ~ * { opacity: .4; }
+.camSwitch:has(input:disabled) { cursor: not-allowed; }
+.camSwitch input:focus-visible + .track { outline: 2px solid #fff; outline-offset: 2px; }
+
 /* plate contents while there is no picture */
 .ph {
   position: absolute; inset: 0;
@@ -307,7 +332,7 @@ details.log[open] summary .icon { transform: rotate(90deg); }
 
 /* ── phone: real reflow ─────────────────────────────────── */
 @media (max-width: 899px) {
-  :root { --tap: 52px; }
+  :root { --tap: 52px; --capH: 44px; }   /* the caption bar is now a touch target */
   .sheet { grid-template-columns: 1fr; }          /* the shoulder folds away … */
   .shoulder { display: none; }                    /* … the pad's centre stop carries it */
   .cols { grid-template-columns: 1fr; }
@@ -320,9 +345,8 @@ details.log[open] summary .icon { transform: rotate(90deg); }
   body.live .field { order: 1; width: auto; margin-left: auto; }
   body.live .readout { order: 2; width: 100%; margin-left: 0; }
   .plateWrap { padding: var(--s4) var(--s4) 0; }
-  .rail { border-left: 0; padding: 0 var(--s4) var(--s4); }
+  .rail { display: flex; border-left: 0; padding: 0 var(--s4) var(--s4); }
   .grp.drive { order: -1; }                       /* driving first, in thumb reach */
-  .rail { display: flex; }
   .pad .btn { height: 56px; }
 }
 
@@ -404,12 +428,19 @@ details.log[open] summary .icon { transform: rotate(90deg); }
                       也可以直接连机器人自己的热点，此时 IP 是 <b>192.168.4.1</b>。</li>
                   <li>在上方填入机器人的 <b>IP 地址</b>，按「连接」。</li>
                   <li>浏览器若询问<b>是否允许访问本地网络设备</b>，请点允许。</li>
+                  <li>连上后拨动下方图注条里的<b>「画面」开关</b>，即可看到实时画面。</li>
                 </ol>
               </div>
             </div>
             <div class="capbar">
               <span class="mark"><i></i><span id="capState">未连接</span></span>
               <span class="sp" id="capMeta">—</span>
+              <label class="camSwitch">
+                <input type="checkbox" id="camToggle" class="need" role="switch"
+                       disabled aria-label="摄像头画面开关">
+                <span class="track"><span class="knob"></span></span>
+                <span>画面</span>
+              </label>
             </div>
           </div>
         </div>
@@ -420,15 +451,6 @@ details.log[open] summary .icon { transform: rotate(90deg); }
       </div>
 
       <div class="rail">
-        <div class="grp">
-          <h2>画面 <u>PLATE</u></h2>
-          <div class="row2">
-            <button class="btn solid need" id="camOn" disabled>
-              <svg class="icon" viewBox="0 0 24 24"><use href="#i-video"/></svg>开启</button>
-            <button class="btn need" id="camOff" disabled>关闭</button>
-          </div>
-        </div>
-
         <div class="grp drive">
           <h2>移动 <u>DRIVE</u></h2>
           <div class="pad">
@@ -568,7 +590,11 @@ function connect() {
   cmdWs.onmessage = e => {
     const p = pending.shift();
     if (!p) return;
-    const r = JSON.parse(new TextDecoder().decode(e.data));
+    let r;
+    // the entry is already shifted; if the frame is malformed and we let the throw
+    // escape, this promise never settles and every await on it (halt included) hangs
+    try { r = JSON.parse(new TextDecoder().decode(e.data)); }
+    catch { log('收到无法解析的命令回复，已丢弃', true); p.rej(new Error('bad frame')); return; }
     if (r.status === 'error') { log(`命令 ${r.cmd_id} 失败: ${r.error_info ?? '未知错误'}`, true); p.rej(r); }
     else p.res(r);
   };
@@ -578,7 +604,7 @@ function connect() {
     clearTimeout(connectTimer);
     $('hostLabel').textContent = host;
     setState('live', '已连接');
-    placeholder('画面未开启', '点右侧「开启」查看机器人摄像头实时画面。', '已连接', '画面未开启');
+    placeholder('画面未开启', '拨动图注条上的「画面」开关即可查看实时画面。', '已连接', '画面未开启');
     log('已连接，初始化程序');
     const sock = cmdWs;
     await send({ cmd_id: 'program_init' }).catch(() => {});
@@ -613,6 +639,7 @@ function connect() {
     lastUrl = url;
     frames++;
     body.classList.add('streaming');
+    $('camToggle').checked = true;      // the robot may already be streaming
     $('capState').textContent = '实时';
   };
   imgWs.onclose = () => body.classList.remove('streaming');
@@ -626,7 +653,8 @@ function openStatus(host) {
     if (statusWs.readyState === 1) statusWs.send(new Uint8Array([1]));
   }, 200);
   statusWs.onmessage = e => {
-    const s = JSON.parse(new TextDecoder().decode(e.data)).robot;
+    let s;
+    try { s = JSON.parse(new TextDecoder().decode(e.data)).robot; } catch { return; }
     if (!s) return;
     $('battery').textContent = s.battery + '%';
     $('heading').textContent = Math.round(+s.heading) + '°';
@@ -656,6 +684,7 @@ function closeAll() {
 function teardown() {
   closeAll();
   body.classList.remove('streaming');
+  $('camToggle').checked = false;
   if (lastUrl) { URL.revokeObjectURL(lastUrl); lastUrl = null; }
   $('view').removeAttribute('src');
   $('battery').textContent = $('heading').textContent = '—';
@@ -681,11 +710,11 @@ $('ip').onkeydown = e => { if (e.key === 'Enter') connect(); };  // no bare `&&`
 $('speed').oninput = e => $('speedv').textContent = e.target.value + ' mm/s';
 $('turn').oninput  = e => $('turnv').textContent  = e.target.value + ' °/s';
 
-$('camOn').onclick  = () => imgWs?.send(new Uint8Array([1]));
-$('camOff').onclick = () => {
+$('camToggle').onchange = e => {
+  if (e.target.checked) { imgWs?.send(new Uint8Array([1])); return; }
   imgWs?.send(new Uint8Array([0]));
   body.classList.remove('streaming');
-  placeholder('画面已关闭', '点「开启」恢复实时画面。', '已连接', '画面已关闭');
+  placeholder('画面已关闭', '把图注条上的「画面」开关拨开即可恢复。', '已连接', '画面已关闭');
 };
 
 $('ledOn').onclick = () => {
