@@ -26,6 +26,7 @@
 
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px;
   --tap: 40px;
+  --capH: 28px;   /* fixed, so the plate can reserve it exactly */
   --fast: 130ms cubic-bezier(.2,.8,.3,1);
 
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
@@ -164,10 +165,12 @@ input::placeholder { color: #9BA09A; }
 .cols { display: grid; grid-template-columns: minmax(0,1fr) 300px; flex: 1; min-height: 0; }
 
 /* ── the plate ──────────────────────────────────────────── */
-.plateWrap { padding: var(--s5); display: flex; flex-direction: column; min-width: 0; }
+.plateWrap { padding: var(--s5); display: flex; flex-direction: column;
+  min-width: 0; min-height: 0; }
+.stageArea { display: grid; place-items: center; min-height: 0; }
 .plateBox {
   border: 1px solid var(--ink);
-  width: 100%; max-width: 760px; margin-inline: auto;
+  width: 100%; max-width: 760px;
 }
 .figure { position: relative; aspect-ratio: 4/3; background: var(--plate); overflow: hidden; }
 #view { width: 100%; height: 100%; object-fit: contain; display: block; background: #0d0f0e; }
@@ -178,7 +181,8 @@ body:not(.streaming) #view { display: none; }
 .capbar {
   background: var(--ink); color: var(--paper);
   display: flex; align-items: center; gap: var(--s3);
-  padding: 7px 11px; font: 500 10.5px/1.35 var(--mono); letter-spacing: .04em;
+  height: var(--capH); padding: 0 11px;
+  font: 500 10.5px/1 var(--mono); letter-spacing: .04em;
   transition: background var(--fast);
 }
 body.streaming .capbar { background: var(--press); }
@@ -319,6 +323,18 @@ details.log[open] summary .icon { transform: rotate(90deg); }
   .pad .btn { height: 56px; }
 }
 
+/* Desktop: the plate takes whichever axis binds first, so the column never
+   ends in a dead band. `container-type: size` stops the element taking height
+   from its contents, so the whole chain above it must be a definite height —
+   body's `min-height` alone leaves it indefinite and the plate collapses to 0.
+   Guarded to ≥900px: on a phone the page must stay free to scroll. */
+@media (min-width: 900px) {
+  body { height: 100dvh; }
+  .page, .cols, .plateWrap { min-height: 0; }
+  .stageArea { flex: 1; min-height: 0; width: 100%; container-type: size; }
+  .plateBox { width: min(100cqw, calc((100cqh - var(--capH)) * 4 / 3)); max-width: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
@@ -372,25 +388,26 @@ details.log[open] summary .icon { transform: rotate(90deg); }
 
     <div class="cols">
       <div class="plateWrap">
-        <div class="plateBox">
-          <div class="figure">
-            <img id="view" alt="机器人摄像头实时画面">
-            <div class="ph">
-              <svg viewBox="0 0 24 24"><use href="#i-video-off"/></svg>
-              <p id="phTitle">尚未连接机器人</p>
-              <p id="phHint">确认设备与机器人在同一局域网，输入 IP 后点击「连接」。</p>
-              <ol class="steps">
-                <li>把机器人开机，让它和这台设备连到<b>同一个 Wi-Fi</b>；
-                    也可以直接连机器人自己的热点，此时 IP 是 <b>192.168.4.1</b>。</li>
-                <li>在上方填入机器人的 <b>IP 地址</b>，按「连接」。</li>
-                <li>浏览器若询问<b>是否允许访问本地网络设备</b>，请点允许。</li>
-              </ol>
+        <div class="stageArea">
+          <div class="plateBox">
+            <div class="figure">
+              <img id="view" alt="机器人摄像头实时画面">
+              <div class="ph">
+                <svg viewBox="0 0 24 24"><use href="#i-video-off"/></svg>
+                <p id="phTitle">尚未连接机器人</p>
+                <p id="phHint">确认设备与机器人在同一局域网，输入 IP 后点击「连接」。</p>
+                <ol class="steps">
+                  <li>把机器人开机，让它和这台设备连到<b>同一个 Wi-Fi</b>；
+                      也可以直接连机器人自己的热点，此时 IP 是 <b>192.168.4.1</b>。</li>
+                  <li>在上方填入机器人的 <b>IP 地址</b>，按「连接」。</li>
+                  <li>浏览器若询问<b>是否允许访问本地网络设备</b>，请点允许。</li>
+                </ol>
+              </div>
             </div>
-          </div>
-          <div class="capbar">
-            <span class="mark"><i></i><span id="capState">未连接</span></span>
-            <span id="capFig">图 1 · 机器人前视摄像头</span>
-            <span class="sp" id="capMeta">—</span>
+            <div class="capbar">
+              <span class="mark"><i></i><span id="capState">未连接</span></span>
+              <span class="sp" id="capMeta">—</span>
+            </div>
           </div>
         </div>
         <p class="figno">
@@ -616,7 +633,9 @@ function openStatus(host) {
 // one fps sample per second, shown in the caption bar like a plate's spec line
 setInterval(() => {
   if (!body.classList.contains('streaming')) return;
-  $('capMeta').textContent = `${$('view').naturalWidth || '—'} × ${$('view').naturalHeight || '—'} · ${frames} fps`;
+  const w = $('view').naturalWidth;                  // unknown until the first frame decodes
+  $('capMeta').textContent = w ? `${w} × ${$('view').naturalHeight} · ${frames} fps`
+                               : `${frames} fps`;
   frames = 0;
 }, 1000);
 
