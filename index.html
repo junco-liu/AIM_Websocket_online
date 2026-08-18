@@ -305,17 +305,6 @@ input[type=color]::-moz-color-swatch { border: 0; }
 .keys kbd { border: 1px solid var(--rule); background: #fff; padding: 1px 4px;
   margin-right: 2px; font: 500 9.5px/1 var(--mono); color: var(--ink); }
 
-/* colophon — the printed manual signs itself */
-.colophon {
-  margin-top: auto; padding-top: var(--s4);
-  border-top: 1px solid var(--rule);
-  display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap;
-  font: 400 10.5px/1.7 var(--mono); color: var(--ink2);
-}
-.colophon a { color: var(--press); text-decoration: none;
-  border-bottom: 1px solid #17518C4d; }
-.colophon a:hover { border-bottom-color: var(--press); }
-
 details.log { border-top: 1px solid var(--rule); margin-top: 15px; }
 details.log summary {
   padding: 10px 0 0; cursor: pointer; list-style: none;
@@ -329,6 +318,30 @@ details.log[open] summary .icon { transform: rotate(90deg); }
   font: 400 11px/1.7 var(--mono); color: var(--ink2);
   white-space: pre-wrap; word-break: break-all; }
 #log .err { color: var(--stop); }
+
+.site-footer {
+  border-top: 1px solid var(--rule);
+  padding: 10px var(--s5);
+  text-align: center;
+  font: 400 10.5px/1.8 var(--mono);
+  color: var(--ink2);
+}
+
+.footer-line {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-footer a {
+  color: var(--press);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
 
 /* ── phone: real reflow ─────────────────────────────────── */
 @media (max-width: 899px) {
@@ -502,12 +515,6 @@ details.log[open] summary .icon { transform: rotate(90deg); }
           </div>
         </div>
 
-        <div class="colophon">
-          <span>AIM 控制台 · 单文件 · 无服务器</span>
-          <a href="https://github.com/junco-liu/AIM_Websocket_online"
-             target="_blank" rel="noopener noreferrer">源码 GitHub ↗</a>
-        </div>
-
         <details class="log">
           <summary><svg class="icon" viewBox="0 0 24 24"><use href="#i-chevron"/></svg>活动日志</summary>
           <pre id="log"></pre>
@@ -516,6 +523,23 @@ details.log[open] summary .icon { transform: rotate(90deg); }
     </div>
   </div>
 </div>
+
+<footer class="site-footer">
+  <div class="footer-line">
+    <span>AIM WebSocket Online</span>
+    <span class="sep">·</span>
+    <a href="https://github.com/junco-liu/AIM_Websocket_online"
+       target="_blank"
+       rel="noopener noreferrer">
+      GitHub Repository ↗
+    </a>
+  </div>
+
+  <div class="footer-line">
+    <span>Powered by Junco.</span>
+    <span>© 2026 VEX Academy</span>
+  </div>
+</footer>
 
 <script>
 const $ = id => document.getElementById(id);
