@@ -314,11 +314,11 @@ details.vt[open] summary .icon { transform: rotate(90deg); }
 }
 .tab.on { color: #fff; border-bottom-color: #fff; }
 .tab:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
-body.scr .camOnly { display: none; }
+body.tab-scr .camOnly { display: none; }
 
 .scr { position: absolute; inset: 0; display: none; place-items: center; }
-body.scr .scr { display: grid; }
-body.scr .ph, body.scr #view, body.scr #vlay { display: none; }
+body.tab-scr .scr { display: grid; }
+body.tab-scr .ph, body.tab-scr #view, body.tab-scr #vlay { display: none; }
 .scrBox { position: relative; height: 100%; aspect-ratio: 1; max-width: 100%; }
 #scrCv { width: 100%; height: 100%; display: block; background: #000;
   image-rendering: pixelated; touch-action: none; cursor: crosshair; }
@@ -1156,7 +1156,7 @@ function encode(idx, pal) {
 /* ── wiring ─────────────────────────────────────────────── */
 
 const setTab = scr => {
-  body.classList.toggle('scr', scr);
+  body.classList.toggle('tab-scr', scr);
   $('tabScr').classList.toggle('on', scr); $('tabCam').classList.toggle('on', !scr);
   $('tabScr').setAttribute('aria-selected', scr); $('tabCam').setAttribute('aria-selected', !scr);
   $('scrMeta').hidden = !scr;
@@ -1422,10 +1422,20 @@ if (new URLSearchParams(location.search).has('selftest')) {
          && inCircle(q.x + 0.5, q.y + 0.5)
          && inCircle(q.x + q.width - 0.5, q.y + q.height - 0.5));
 
-  const ok = afterRetries <= 2 && afterDrop === 0 && vOk && eOk;
+  // A body state class sharing a name with an element class is how `.scr { display: none }`
+  // once matched <body> and took the whole page with it. Every state must leave body visible.
+  const keep = body.className;
+  const bOk = ['tab-scr', 'imgmode', 'vlay', 'streaming', 'live', 'busy', 'pristine'].every(c => {
+    body.className = c;
+    return getComputedStyle(body).display !== 'none' && body.offsetWidth > 0;
+  });
+  body.className = keep;
+
+  const ok = afterRetries <= 2 && afterDrop === 0 && vOk && eOk && bOk;
   const msg = `自检 ${ok ? '通过' : '失败'}：3 次重试后存活 ${afterRetries} 个（应 ≤2），` +
               `断线后存活 ${afterDrop} 个（应 0），视觉解析 ${vOk ? '正常' : '异常'}，` +
-              `屏幕编码 ${eOk ? '正常' : '异常'}（${eRect.length} 块）`;
+              `屏幕编码 ${eOk ? '正常' : '异常'}（${eRect.length} 块），` +
+              `状态类 ${bOk ? '正常' : '有冲突'}`;
   log(msg, !ok);
   (ok ? console.log : console.error)(msg);
 }
