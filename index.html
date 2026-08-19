@@ -303,6 +303,43 @@ details.vt[open] summary .icon { transform: rotate(90deg); }
 .vtab .k i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; }
 .vempty { margin: 8px 0 0; font: 400 11px/1.6 var(--mono); color: var(--off); }
 
+/* ── the robot's screen: a second content for the same plate ─ */
+/* 240×240 coordinates, physically a circle of r=120 — the corners are 21% of
+   the square and are never visible, so the plate hatches them out. */
+.tabs { display: flex; height: 100%; margin-left: -11px; }
+.tab {
+  appearance: none; background: none; border: 0; border-bottom: 2px solid transparent;
+  height: 100%; padding: 0 11px; cursor: pointer;
+  font: inherit; letter-spacing: inherit; color: #ffffff8f;
+}
+.tab.on { color: #fff; border-bottom-color: #fff; }
+.tab:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+body.scr .camOnly { display: none; }
+
+.scr { position: absolute; inset: 0; display: none; place-items: center; }
+body.scr .scr { display: grid; }
+body.scr .ph, body.scr #view, body.scr #vlay { display: none; }
+.scrBox { position: relative; height: 100%; aspect-ratio: 1; max-width: 100%; }
+#scrCv { width: 100%; height: 100%; display: block; background: #000;
+  image-rendering: pixelated; touch-action: none; cursor: crosshair; }
+body.imgmode #scrCv { cursor: grab; }
+#scrMask { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; }
+.segb {
+  appearance: none; background: var(--paper); cursor: pointer;
+  border: 1px solid var(--rule); height: 30px; color: var(--ink2);
+  font: 400 11px/1 var(--mono);
+}
+.segb + .segb { border-left: 0; }
+.segb.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.segb:focus-visible { outline: 2px solid var(--press); outline-offset: 2px; }
+
+body:not(.imgmode) .forImg, body.imgmode .forPen { display: none; }
+.cost { margin: 9px 0 7px; font: 400 10.5px/1.5 var(--mono); color: var(--ink2); }
+.bar { height: 3px; background: var(--rule-2); margin-top: 7px; }
+.bar i { display: block; height: 100%; background: var(--press); width: 0; }
+
 /* ── the rail: hanging head + full rule, no cards ───────── */
 .rail { border-left: 1px solid var(--rule); padding: 0 var(--s5) var(--s5);
   overflow-y: auto; display: flex; flex-direction: column; }
@@ -497,17 +534,42 @@ details.log[open] summary .icon { transform: rotate(90deg); }
               </div>
               <svg id="vlay" viewBox="0 0 320 240" preserveAspectRatio="xMidYMid meet"
                    aria-hidden="true"></svg>
+              <div class="scr">
+                <div class="scrBox">
+                  <canvas id="scrCv"></canvas>
+                  <svg id="scrMask" viewBox="0 0 240 240" aria-hidden="true">
+                    <defs>
+                      <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse"
+                               patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="7" stroke="#000000B8" stroke-width="4"/>
+                      </pattern>
+                      <mask id="corners">
+                        <rect width="240" height="240" fill="#fff"/>
+                        <circle cx="120" cy="120" r="120" fill="#000"/>
+                      </mask>
+                    </defs>
+                    <rect width="240" height="240" fill="url(#hatch)" mask="url(#corners)"/>
+                    <circle cx="120" cy="120" r="119.5" fill="none" stroke="#FFFFFF4D"/>
+                    <path d="M120 110v20M110 120h20" stroke="#FFFFFF4D"/>
+                  </svg>
+                </div>
+              </div>
             </div>
             <div class="capbar">
+              <div class="tabs" role="tablist">
+                <button class="tab on" id="tabCam" role="tab" aria-selected="true">画面</button>
+                <button class="tab" id="tabScr" role="tab" aria-selected="false">屏幕</button>
+              </div>
               <span class="mark"><i></i><span id="capState">未连接</span></span>
-              <span class="sp" id="capMeta">—</span>
-              <label class="camSwitch">
+              <span class="sp camOnly" id="capMeta">—</span>
+              <span class="sp" id="scrMeta" hidden>240 × 240 · 可见区 r=120</span>
+              <label class="camSwitch camOnly">
                 <input type="checkbox" id="camToggle" class="need" role="switch"
                        disabled aria-label="摄像头画面开关">
                 <span class="track"><span class="knob"></span></span>
                 <span>画面</span>
               </label>
-              <label class="camSwitch">
+              <label class="camSwitch camOnly">
                 <input type="checkbox" id="vToggle" class="need" role="switch"
                        disabled aria-label="AI 视觉标注开关">
                 <span class="track"><span class="knob"></span></span>
@@ -564,6 +626,56 @@ details.log[open] summary .icon { transform: rotate(90deg); }
           <div class="sigs" id="sigs"></div>
           <p class="keys">取消勾选会关掉机器人端对应检测，从源头少发数据；
             标注不依赖画面，关掉视频流也能看。</p>
+        </div>
+
+        <div class="grp">
+          <h2>屏幕 <u>SCREEN</u></h2>
+          <div class="seg">
+            <button class="segb on" id="mPen">画笔</button>
+            <button class="segb" id="mImg">图片</button>
+          </div>
+
+          <div class="forPen">
+            <div class="lightRow" style="margin-top:7px">
+              <select id="penTool" aria-label="工具">
+                <option value="pen">画笔</option>
+                <option value="eraser">橡皮</option>
+              </select>
+              <input type="color" id="penColor" value="#FFFFFF" aria-label="笔色">
+            </div>
+            <div class="meter">
+              <div class="lab"><label for="penW">笔宽</label><b id="penWv">3 px</b></div>
+              <input type="range" id="penW" min="1" max="16" step="1" value="3">
+            </div>
+            <p class="keys">在图版上直接画，抬笔即发。未连接时只在本地画。</p>
+          </div>
+
+          <div class="forImg">
+            <div class="row2" style="margin-top:7px">
+              <button class="btn" id="pick">选择图片</button>
+              <button class="btn" id="fit">复位</button>
+            </div>
+            <input type="file" id="file" accept="image/*" hidden>
+            <div class="meter">
+              <div class="lab"><label for="nCol">颜色数</label><b id="nColv">8</b></div>
+              <input type="range" id="nCol" min="2" max="32" step="1" value="8">
+            </div>
+            <div class="meter">
+              <div class="lab"><label for="zoom">缩放</label><b id="zoomv">100%</b></div>
+              <input type="range" id="zoom" min="100" max="400" step="5" value="100">
+            </div>
+            <p class="cost" id="cost">选一张图片。拖动图版可平移。</p>
+            <div class="row2">
+              <button class="btn need" id="scrSend" disabled>发送</button>
+              <button class="btn" id="scrStop" disabled>取消</button>
+            </div>
+            <div class="bar"><i id="barFill"></i></div>
+          </div>
+
+          <div class="row2" style="margin-top:11px">
+            <input type="color" id="bgColor" value="#000000" aria-label="背景色">
+            <button class="btn need" id="scrClear" disabled>清屏</button>
+          </div>
         </div>
 
         <div class="grp">
@@ -661,6 +773,7 @@ function setState(cls, text) {
   $('ip').disabled = $('connect').disabled = live || cls === 'busy';
   $('disconnect').disabled = !live && cls !== 'busy';
   document.querySelectorAll('.need').forEach(b => b.disabled = !live);
+  $('scrSend').disabled = !live || busy || !scrOps.length;
 }
 
 function connect() {
@@ -825,6 +938,255 @@ function teardown() {
 // closing the rest — otherwise the feed socket's own close gets reported as a fault.
 function disconnect() { if (cmdWs) cmdWs.close(); else teardown(); }
 
+/* ── the robot's screen ───────────────────────────────────
+   240×240 coordinates over a circular r=120 panel. Per-pixel is not an option:
+   45,239 pixels are visible and lcd_draw_pixel carries no colour of its own, so a
+   multi-colour image would need a set_pen_color between most of them — call it 90k
+   round trips on a socket that answers one request at a time.
+
+   What works: quantise, run-length encode each row, merge runs that stack, then group
+   by colour. lcd_draw_rectangle carries r,g,b for its fill but outlines in the current
+   pen colour — grouping by colour means one lcd_set_pen_color per colour (not per run)
+   and the outline lands on top of an identical fill. */
+
+const SCR = 240, SCR_R = 120;
+const scrCv = $('scrCv');
+scrCv.width = scrCv.height = SCR;
+const scrCtx = scrCv.getContext('2d', { willReadFrequently: true });
+
+let scrOps = [];        // what the current image would cost to send
+let sendRate = null;    // ms per command, measured on the wire — never guessed
+let busy = false, abort = false;
+
+function scrFill(hex) { scrCtx.fillStyle = hex; scrCtx.fillRect(0, 0, SCR, SCR); }
+scrFill('#000000');
+
+const scrPos = e => {
+  const b = scrCv.getBoundingClientRect();
+  return { x: (e.clientX - b.left) / b.width * SCR, y: (e.clientY - b.top) / b.height * SCR };
+};
+
+// One request in flight, always — the same discipline the Python client keeps.
+async function runOps(ops) {
+  if (busy || !ops.length) return;
+  busy = true; abort = false;
+  $('scrStop').disabled = false; $('scrSend').disabled = true;
+  const t0 = performance.now();
+  let i = 0;
+  for (; i < ops.length; i++) {
+    if (abort || cmdWs?.readyState !== 1) break;
+    try { await send(ops[i]); } catch { break; }
+    if ((i & 15) === 0) $('barFill').style.width = (i / ops.length * 100) + '%';
+  }
+  const dt = performance.now() - t0;
+  if (i > 20) sendRate = dt / i;            // calibrate on the real link, then reuse
+  $('barFill').style.width = '0';
+  busy = false; $('scrStop').disabled = true;
+  $('scrSend').disabled = !body.classList.contains('live') || !scrOps.length;
+  if (i) log(`屏幕：发出 ${i}/${ops.length} 条，用时 ${(dt / 1000).toFixed(1)}s` +
+             (abort ? '（已取消）' : ''), abort || i < ops.length);
+  showCost();
+}
+
+const showCost = () => $('cost').textContent = !scrOps.length
+  ? '选一张图片。拖动图版可平移。'
+  : `${scrOps.length.toLocaleString()} 条命令` +
+    (sendRate ? ` · 约 ${Math.max(1, Math.round(scrOps.length * sendRate / 1000))} 秒`
+              : ' · 首次发送后才会估时');
+
+/* ── pen: draw on the plate, send on pointer-up ─────────── */
+
+let stroke = null, pan = null;
+
+scrCv.onpointerdown = e => {
+  scrCv.setPointerCapture(e.pointerId);
+  if (body.classList.contains('imgmode')) { pan = { ...scrPos(e), ox: img.ox, oy: img.oy }; return; }
+  const p = scrPos(e);
+  const col = $('penTool').value === 'eraser' ? $('bgColor').value : $('penColor').value;
+  stroke = { pts: [p], col, w: +$('penW').value };
+  scrCtx.strokeStyle = col;
+  scrCtx.lineWidth = stroke.w;
+  scrCtx.lineCap = scrCtx.lineJoin = 'round';
+};
+
+scrCv.onpointermove = e => {
+  const p = scrPos(e);
+  if (pan) {
+    img.ox = pan.ox + (p.x - pan.x); img.oy = pan.oy + (p.y - pan.y);
+    reRender();
+    return;
+  }
+  if (!stroke) return;
+  const a = stroke.pts[stroke.pts.length - 1];
+  if (Math.hypot(p.x - a.x, p.y - a.y) < 2) return;   // coalesce: one command per 2px
+  stroke.pts.push(p);
+  scrCtx.beginPath(); scrCtx.moveTo(a.x, a.y); scrCtx.lineTo(p.x, p.y); scrCtx.stroke();
+};
+
+scrCv.onpointerup = () => {
+  pan = null;
+  if (!stroke) return;
+  const s = stroke; stroke = null;
+  if (s.pts.length < 2 || cmdWs?.readyState !== 1) return;
+  const r = Math.round;
+  quiet(runOps([
+    { cmd_id: 'lcd_set_pen_width', width: s.w },
+    { cmd_id: 'lcd_set_pen_color', ...rgb(s.col) },
+    ...s.pts.slice(1).map((p, i) => ({ cmd_id: 'lcd_draw_line',
+      x1: r(s.pts[i].x), y1: r(s.pts[i].y), x2: r(p.x), y2: r(p.y) })),
+  ]));
+};
+scrCv.onpointercancel = scrCv.onpointerup;
+
+/* ── image: crop, quantise, encode ──────────────────────── */
+
+const img = { el: null, ox: 0, oy: 0 };
+
+$('pick').onclick = () => $('file').click();
+$('file').onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const el = new Image();
+  el.onload = () => { img.el = el; fitImage(); };
+  el.onerror = () => log('这张图片读不出来', true);
+  el.src = URL.createObjectURL(f);
+};
+
+function fitImage() {
+  img.ox = img.oy = 0;
+  $('zoom').value = 100; $('zoomv').textContent = '100%';
+  renderImage();
+}
+$('fit').onclick = fitImage;
+
+// Median cut: split the box with the widest channel until we have n of them. The
+// standard answer for "pick n colours from this image", and barely longer than the
+// naive popularity histogram that falls apart on anything but flat art.
+function medianCut(px, n) {
+  let boxes = [px];
+  const span = b => {
+    const lo = [255, 255, 255], hi = [0, 0, 0];
+    for (const p of b) for (let c = 0; c < 3; c++) {
+      if (p[c] < lo[c]) lo[c] = p[c];
+      if (p[c] > hi[c]) hi[c] = p[c];
+    }
+    return [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+  };
+  while (boxes.length < n) {
+    boxes.sort((a, b) => Math.max(...span(b)) - Math.max(...span(a)));
+    const b = boxes[0];
+    if (b.length < 2) break;
+    const sp = span(b), ch = sp.indexOf(Math.max(...sp));
+    b.sort((p, q) => p[ch] - q[ch]);
+    boxes.splice(0, 1, b.slice(0, b.length >> 1), b.slice(b.length >> 1));
+  }
+  return boxes.map(b => {
+    const t = [0, 0, 0];
+    for (const p of b) { t[0] += p[0]; t[1] += p[1]; t[2] += p[2]; }
+    return t.map(v => Math.round(v / b.length));
+  });
+}
+
+function renderImage() {
+  if (!img.el) return;
+  const z = +$('zoom').value / 100;
+  // cover the 240 square at zoom 1, then pan/zoom on top
+  const k = Math.max(SCR / img.el.width, SCR / img.el.height) * z;
+  const w = img.el.width * k, h = img.el.height * k;
+  scrFill($('bgColor').value);
+  scrCtx.drawImage(img.el, (SCR - w) / 2 + img.ox, (SCR - h) / 2 + img.oy, w, h);
+
+  const id = scrCtx.getImageData(0, 0, SCR, SCR), d = id.data;
+  const sample = [];
+  for (let i = 0; i < d.length; i += 4 * 7) sample.push([d[i], d[i + 1], d[i + 2]]);
+  const pal = medianCut(sample, +$('nCol').value);
+
+  const idx = new Int16Array(SCR * SCR);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    let best = 0, bd = Infinity;
+    for (let c = 0; c < pal.length; c++) {
+      const dr = d[i] - pal[c][0], dg = d[i + 1] - pal[c][1], db = d[i + 2] - pal[c][2];
+      const q = dr * dr + dg * dg + db * db;
+      if (q < bd) { bd = q; best = c; }
+    }
+    idx[j] = best;
+    d[i] = pal[best][0]; d[i + 1] = pal[best][1]; d[i + 2] = pal[best][2];
+  }
+  scrCtx.putImageData(id, 0, 0);
+  scrOps = encode(idx, pal);
+  showCost();
+  $('scrSend').disabled = busy || !body.classList.contains('live');
+}
+
+function encode(idx, pal) {
+  const runs = [];
+  for (let y = 0; y < SCR; y++) {
+    // clip each row to the visible circle — the corners are 21% of the square
+    const dy = y + 0.5 - SCR_R, dx = Math.floor(Math.sqrt(Math.max(0, SCR_R * SCR_R - dy * dy)));
+    const x0 = SCR_R - dx, x1 = SCR_R + dx;
+    if (x1 <= x0) continue;
+    let s = x0, c = idx[y * SCR + x0];
+    for (let x = x0 + 1; x <= x1; x++) {
+      const v = x < x1 ? idx[y * SCR + x] : -1;
+      if (v !== c) { runs.push({ x: s, y, w: x - s, h: 1, c }); s = x; c = v; }
+    }
+  }
+  // stack runs that sit directly on top of each other with the same span and colour
+  runs.sort((a, b) => a.x - b.x || a.w - b.w || a.c - b.c || a.y - b.y);
+  const box = [];
+  for (const r of runs) {
+    const p = box[box.length - 1];
+    if (p && p.x === r.x && p.w === r.w && p.c === r.c && p.y + p.h === r.y) p.h++;
+    else box.push({ ...r });
+  }
+  // one lcd_set_pen_color per colour, not per rectangle
+  box.sort((a, b) => a.c - b.c);
+  const ops = [{ cmd_id: 'lcd_clear_screen', ...rgb($('bgColor').value) },
+               { cmd_id: 'lcd_set_pen_width', width: 1 }];
+  let cur = -1;
+  for (const r of box) {
+    const p = pal[r.c];
+    if (r.c !== cur) { cur = r.c; ops.push({ cmd_id: 'lcd_set_pen_color', r: p[0], g: p[1], b: p[2] }); }
+    ops.push({ cmd_id: 'lcd_draw_rectangle', x: r.x, y: r.y, width: r.w, height: r.h,
+               r: p[0], g: p[1], b: p[2], b_transparency: false });
+  }
+  return ops;
+}
+
+/* ── wiring ─────────────────────────────────────────────── */
+
+const setTab = scr => {
+  body.classList.toggle('scr', scr);
+  $('tabScr').classList.toggle('on', scr); $('tabCam').classList.toggle('on', !scr);
+  $('tabScr').setAttribute('aria-selected', scr); $('tabCam').setAttribute('aria-selected', !scr);
+  $('scrMeta').hidden = !scr;
+};
+$('tabCam').onclick = () => setTab(false);
+$('tabScr').onclick = () => setTab(true);
+
+const setMode = im => {
+  body.classList.toggle('imgmode', im);
+  $('mImg').classList.toggle('on', im); $('mPen').classList.toggle('on', !im);
+};
+$('mPen').onclick = () => setMode(false);
+$('mImg').onclick = () => setMode(true);
+
+let rq;
+const reRender = () => { cancelAnimationFrame(rq); rq = requestAnimationFrame(renderImage); };
+
+$('penW').oninput = e => $('penWv').textContent = e.target.value + ' px';
+$('nCol').oninput = e => { $('nColv').textContent = e.target.value; reRender(); };
+$('zoom').oninput = e => { $('zoomv').textContent = e.target.value + '%'; reRender(); };
+$('bgColor').oninput = () => { if (img.el) reRender(); };
+
+$('scrSend').onclick = () => quiet(runOps(scrOps));
+$('scrStop').onclick = () => { abort = true; };
+$('scrClear').onclick = () => {
+  scrFill($('bgColor').value);
+  scrOps = []; showCost();
+  quiet(runOps([{ cmd_id: 'lcd_clear_screen', ...rgb($('bgColor').value) }]));
+};
+
 /* ── AI vision ────────────────────────────────────────────
    The aivision block rides along in every ws_status packet whether we look at
    it or not, so filtering in the browser saves nothing on the wire. The only
@@ -951,11 +1313,10 @@ $('camToggle').onchange = e => {
     : '把图注条上的「画面」开关拨开即可恢复。', '已连接', '画面已关闭');
 };
 
-$('ledOn').onclick = () => {
-  const h = $('color').value;
-  quiet(send({ cmd_id: 'light_set', [$('led').value]: {
-    r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16), b: parseInt(h.slice(5, 7), 16) } }));
-};
+const rgb = h => ({ r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16),
+                    b: parseInt(h.slice(5, 7), 16) });
+
+$('ledOn').onclick = () => quiet(send({ cmd_id: 'light_set', [$('led').value]: rgb($('color').value) }));
 $('ledOff').onclick = () => quiet(send({ cmd_id: 'light_set', [$('led').value]: { r: 0, g: 0, b: 0 } }));
 
 document.querySelectorAll('[data-cmd]').forEach(b =>
@@ -1047,9 +1408,24 @@ if (new URLSearchParams(location.search).has('selftest')) {
               && v[1].kind === 'tag' && v[1].rot === 12 && v[1].quad === '10,10 30,12 28,30 8,28'
               && Math.abs(v[0].bearing + 7.6) < 0.1;      // 120,85 sits left of the frame centre
 
-  const ok = afterRetries <= 2 && afterDrop === 0 && vOk;
+  // encode(): rows must run-length merge, nothing may land outside the r=120 circle,
+  // and set_pen_color must be emitted once per colour rather than once per rectangle
+  const pal2 = [[0, 0, 0], [255, 0, 0]];
+  const idx2 = new Int16Array(SCR * SCR);
+  for (let y = 100; y < 140; y++) for (let x = 0; x < SCR; x++) idx2[y * SCR + x] = 1;
+  const eOps = encode(idx2, pal2);
+  const eRect = eOps.filter(o => o.cmd_id === 'lcd_draw_rectangle');
+  const inCircle = (x, y) => Math.hypot(x - SCR_R, y - SCR_R) <= SCR_R + 1;
+  const eOk = eRect.length > 0 && eRect.length < 2 * SCR          // merging actually happened
+    && eOps.filter(o => o.cmd_id === 'lcd_set_pen_color').length === pal2.length
+    && eRect.every(q => q.x >= 0 && q.y >= 0 && q.x + q.width <= SCR && q.y + q.height <= SCR
+         && inCircle(q.x + 0.5, q.y + 0.5)
+         && inCircle(q.x + q.width - 0.5, q.y + q.height - 0.5));
+
+  const ok = afterRetries <= 2 && afterDrop === 0 && vOk && eOk;
   const msg = `自检 ${ok ? '通过' : '失败'}：3 次重试后存活 ${afterRetries} 个（应 ≤2），` +
-              `断线后存活 ${afterDrop} 个（应 0），视觉解析 ${vOk ? '正常' : '异常'}`;
+              `断线后存活 ${afterDrop} 个（应 0），视觉解析 ${vOk ? '正常' : '异常'}，` +
+              `屏幕编码 ${eOk ? '正常' : '异常'}（${eRect.length} 块）`;
   log(msg, !ok);
   (ok ? console.log : console.error)(msg);
 }
