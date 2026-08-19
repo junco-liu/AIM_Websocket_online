@@ -254,6 +254,55 @@ body.pristine #phHint { display: none; }
   font: 500 10px/1 var(--mono); color: var(--ink);
 }
 
+/* ── AI vision: annotation over the plate ───────────────── */
+/* The SVG shares the frame's 320×240 space, so a box needs no pixel maths —
+   preserveAspectRatio lines it up with the object-fit:contain image for free. */
+#vlay { position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; display: none; }
+body.vlay #vlay { display: block; }
+#vlay text { font: 500 9px var(--mono); paint-order: stroke;
+  stroke: #000000B3; stroke-width: 2.6px; stroke-linejoin: round; }
+
+.sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sig {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  border: 1px solid var(--rule); padding: 0 7px; height: 30px;
+  font: 400 11px/1 var(--mono); color: var(--ink2);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.sig input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.sig i { width: 9px; height: 9px; flex: none; opacity: .22; }
+.sig span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sig b { font: 500 11px/1 var(--mono); color: var(--off); font-variant-numeric: tabular-nums; }
+.sig:has(input:checked) { border-color: var(--ink); color: var(--ink); }
+.sig:has(input:checked) i { opacity: 1; }
+.sig:has(input:checked) b { color: var(--ink); }
+.sig:has(input:disabled) { cursor: not-allowed; opacity: .5; }
+.sig:has(input:focus-visible) { outline: 2px solid var(--press); outline-offset: 2px; }
+
+details.vt { max-width: 760px; width: 100%; margin: 9px auto 0;
+  border-top: 1px solid var(--rule); }
+details.vt summary {
+  padding: 9px 0 0; cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 6px;
+  font: 400 10.5px/1 var(--mono); color: var(--ink2);
+}
+details.vt summary::-webkit-details-marker { display: none; }
+details.vt summary .icon { width: 12px; height: 12px; transition: transform var(--fast); }
+details.vt[open] summary .icon { transform: rotate(90deg); }
+.vwrap { max-height: 170px; overflow: auto; margin-top: 7px; }
+.vtab { border-collapse: collapse; width: 100%; min-width: 560px;
+  font: 400 11px/1.65 var(--mono); color: var(--ink2); }
+.vtab th { position: sticky; top: 0; background: var(--paper);
+  text-align: left; font-weight: 500; color: var(--ink); white-space: nowrap;
+  padding: 0 10px 3px 0; border-bottom: 1px solid var(--rule); }
+.vtab td { padding: 2px 10px 2px 0; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.vtab tbody tr + tr td { border-top: 1px solid var(--rule-2); }
+.vtab .k { color: var(--ink); }
+.vtab .k i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; }
+.vempty { margin: 8px 0 0; font: 400 11px/1.6 var(--mono); color: var(--off); }
+
 /* ── the rail: hanging head + full rule, no cards ───────── */
 .rail { border-left: 1px solid var(--rule); padding: 0 var(--s5) var(--s5);
   overflow-y: auto; display: flex; flex-direction: column; }
@@ -358,6 +407,8 @@ details.log[open] summary .icon { transform: rotate(90deg); }
   body.live .field { order: 1; width: auto; margin-left: auto; }
   body.live .readout { order: 2; width: 100%; margin-left: 0; }
   .plateWrap { padding: var(--s4) var(--s4) 0; }
+  .capbar { gap: var(--s2); padding: 0 8px; }
+  .capbar .sp { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rail { display: flex; border-left: 0; padding: 0 var(--s4) var(--s4); }
   .grp.drive { order: -1; }                       /* driving first, in thumb reach */
   .pad .btn { height: 56px; }
@@ -444,6 +495,8 @@ details.log[open] summary .icon { transform: rotate(90deg); }
                   <li>连上后拨动下方图注条里的<b>「画面」开关</b>，即可看到实时画面。</li>
                 </ol>
               </div>
+              <svg id="vlay" viewBox="0 0 320 240" preserveAspectRatio="xMidYMid meet"
+                   aria-hidden="true"></svg>
             </div>
             <div class="capbar">
               <span class="mark"><i></i><span id="capState">未连接</span></span>
@@ -454,12 +507,31 @@ details.log[open] summary .icon { transform: rotate(90deg); }
                 <span class="track"><span class="knob"></span></span>
                 <span>画面</span>
               </label>
+              <label class="camSwitch">
+                <input type="checkbox" id="vToggle" class="need" role="switch"
+                       disabled aria-label="AI 视觉标注开关">
+                <span class="track"><span class="knob"></span></span>
+                <span>标注</span>
+              </label>
             </div>
           </div>
         </div>
         <p class="figno">
           按住方向键即走，松开即停。<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或 <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 平移 · <kbd>Q</kbd><kbd>E</kbd> 转向 · <kbd>空格</kbd> 急停。
         </p>
+        <details class="vt" id="vdetail">
+          <summary><svg class="icon" viewBox="0 0 24 24"><use href="#i-chevron"/></svg>视觉详细信息</summary>
+          <div class="vwrap">
+            <table class="vtab">
+              <thead><tr>
+                <th>目标</th><th>中心 X, Y</th><th>原点 X, Y</th><th>宽 × 高</th>
+                <th>方位</th><th>旋转</th><th>置信</th>
+              </tr></thead>
+              <tbody id="vrows"></tbody>
+            </table>
+          </div>
+          <p class="vempty" id="vempty">没有识别到目标。</p>
+        </details>
       </div>
 
       <div class="rail">
@@ -485,6 +557,13 @@ details.log[open] summary .icon { transform: rotate(90deg); }
           <p class="keys">
             <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或 <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 平移 · <kbd>Q</kbd><kbd>E</kbd> 转向 · <kbd>空格</kbd> 急停
           </p>
+        </div>
+
+        <div class="grp">
+          <h2>视觉 <u>VISION</u></h2>
+          <div class="sigs" id="sigs"></div>
+          <p class="keys">取消勾选会关掉机器人端对应检测，从源头少发数据；
+            标注不依赖画面，关掉视频流也能看。</p>
         </div>
 
         <div class="grp">
@@ -563,7 +642,7 @@ function placeholder(title, hint, cap, meta) {
   if (meta !== undefined) $('capMeta').textContent = meta;
 }
 
-let cmdWs, imgWs, statusWs, lastUrl, statusTimer, connectTimer, everOpen, frames = 0;
+let cmdWs, imgWs, statusWs, curHost, lastUrl, statusTimer, connectTimer, everOpen, frames = 0;
 const pending = [];   // ws_cmd is strictly request/response — replies arrive in send order
 
 function send(obj) {
@@ -589,6 +668,7 @@ function connect() {
   if (!host) { log('请输入机器人 IP 地址', true); $('ip').focus(); return; }
 
   closeAll();                       // never stack sockets on top of a previous attempt
+  curHost = host;
   everOpen = false;
   body.classList.remove('pristine');
   setState('busy', '连接中…');
@@ -652,10 +732,19 @@ function connect() {
     }
   };
 
-  imgWs = new WebSocket(`ws://${host}/ws_img`);
-  imgWs.binaryType = 'blob';
+}
+
+// the feed socket opens on demand, never alongside another handshake
+function openImg() {
+  imgWs = new WebSocket(`ws://${curHost}/ws_img`);
+  // arraybuffer, not blob: a bare probe socket differing only in this receives these
+  // 23KB JPEG frames fine, while the blob-mode socket fails the frame parse
+  imgWs.binaryType = 'arraybuffer';
+  imgWs.onopen = () => setTimeout(() => {
+    if (imgWs?.readyState === 1) imgWs.send(new Uint8Array([1]));
+  }, 250);
   imgWs.onmessage = e => {
-    const url = URL.createObjectURL(e.data);
+    const url = URL.createObjectURL(new Blob([e.data], { type: 'image/jpeg' }));
     $('view').src = url;
     if (lastUrl) URL.revokeObjectURL(lastUrl);
     lastUrl = url;
@@ -664,22 +753,39 @@ function connect() {
     $('camToggle').checked = true;      // the robot may already be streaming
     $('capState').textContent = '实时';
   };
-  imgWs.onclose = () => body.classList.remove('streaming');
+  imgWs.onclose = () => {
+    body.classList.remove('streaming');
+    if (!body.classList.contains('live')) return;   // ordinary teardown — cmdWs reports that
+    $('camToggle').checked = false;
+    log('画面通道断开（ws_img）—— 机器人把视频 socket 关了。命令与标注不受影响，重新「连接」可恢复画面', true);
+    placeholder('画面通道断开', '视频流被机器人关掉了。重新点「连接」即可恢复；标注走的是状态包，不受影响。',
+                undefined, '画面已断');
+  };
 }
 
-// the status socket answers only when polled
+// The status socket answers only when polled, and the Python client keeps exactly one
+// request outstanding: send, block on the reply, then sleep. A fixed setInterval stacks
+// a second request whenever the robot is slower than the interval, and the replies come
+// back over each other as garbage frames. Poll from the reply instead.
 function openStatus(host) {
   statusWs = new WebSocket(`ws://${host}/ws_status`);
   statusWs.binaryType = 'arraybuffer';
-  statusWs.onopen = () => statusTimer = setInterval(() => {
-    if (statusWs.readyState === 1) statusWs.send(new Uint8Array([1]));
-  }, 200);
+  const poll = () => {
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(poll, 1000);      // watchdog, in case a reply never lands
+    if (statusWs?.readyState === 1) statusWs.send(new Uint8Array([1]));
+  };
+  statusWs.onopen = poll;
   statusWs.onmessage = e => {
-    let s;
-    try { s = JSON.parse(new TextDecoder().decode(e.data)).robot; } catch { return; }
-    if (!s) return;
-    $('battery').textContent = s.battery + '%';
-    $('heading').textContent = Math.round(+s.heading) + '°';
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(poll, 200);
+    let j;
+    try { j = JSON.parse(new TextDecoder().decode(e.data)); } catch { return; }
+    if (j.robot) {
+      $('battery').textContent = j.robot.battery + '%';
+      $('heading').textContent = Math.round(+j.robot.heading) + '°';
+    }
+    visionRender(visionParse(j.aivision));
   };
 }
 
@@ -693,8 +799,10 @@ setInterval(() => {
 }, 1000);
 
 function closeAll() {
-  clearInterval(statusTimer);
+  clearTimeout(statusTimer);
   clearTimeout(connectTimer);
+  // stop the stream before dropping the socket, the way the Python client does
+  if (imgWs?.readyState === 1) { try { imgWs.send(new Uint8Array([0])); } catch {} }
   for (const w of [cmdWs, imgWs, statusWs]) {
     if (!w) continue;
     w.onopen = w.onclose = w.onerror = w.onmessage = null;   // detach so we don't re-enter teardown
@@ -710,9 +818,107 @@ function teardown() {
   if (lastUrl) { URL.revokeObjectURL(lastUrl); lastUrl = null; }
   $('view').removeAttribute('src');
   $('battery').textContent = $('heading').textContent = '—';
+  visionRender([]);
 }
 
-function disconnect() { [cmdWs, imgWs, statusWs].forEach(w => w?.close()); }
+// Close only the command link; its onclose runs teardown, which detaches handlers before
+// closing the rest — otherwise the feed socket's own close gets reported as a fault.
+function disconnect() { if (cmdWs) cmdWs.close(); else teardown(); }
+
+/* ── AI vision ────────────────────────────────────────────
+   The aivision block rides along in every ws_status packet whether we look at
+   it or not, so filtering in the browser saves nothing on the wire. The only
+   real lever is upstream: unchecking a family sends tag_detection /
+   model_detection false and the robot stops producing those objects at all. */
+
+const SIGS = {
+  tag:          { label: 'AprilTag', c: '#E0A800' },
+  Robot:        { label: '机器人',   c: '#B23BA6' },
+  BlueBarrel:   { label: '蓝桶',     c: '#2F6FD0' },
+  OrangeBarrel: { label: '橙桶',     c: '#DB6A1E' },
+  SportsBall:   { label: '球',       c: '#2E9E5B' },
+};
+const MODEL_SIGS = ['Robot', 'BlueBarrel', 'OrangeBarrel', 'SportsBall'];
+
+$('sigs').innerHTML = Object.entries(SIGS).map(([k, v]) => `
+  <label class="sig"><input type="checkbox" class="need" data-sig="${k}" disabled checked>
+    <i style="background:${v.c}"></i><span>${v.label}</span><b id="n_${k}">0</b></label>`).join('');
+
+const sigOn = k => $('sigs').querySelector(`[data-sig="${k}"]`).checked;
+
+// type is the object-type bitmask from aim.py: 1 colour, 2 code, 4 AI model, 8 tag
+function visionParse(v) {
+  const names = {};
+  for (const c of v?.classnames?.items ?? []) names[c.index] = c.name;
+  const items = v?.objects?.items ?? [];
+  const out = [];
+  for (let i = 0; i < Math.min(+v?.objects?.count || 0, items.length); i++) {
+    const o = items[i], t = +o.type;
+    const x = +o.originx, y = +o.originy, w = +o.width, h = +o.height;
+    const cx = x + w / 2, cy = y + h / 2;
+    out.push({
+      kind: t & 8 ? 'tag' : t & 4 ? (names[o.id] ?? o.name ?? `AI${o.id}`)
+                          : t & 2 ? 'code' : 'color',
+      id: +o.id, x, y, w, h, cx, cy,
+      score: o.score === undefined ? null : +o.score,
+      // tags report degrees; colour and code angles arrive in centi-degrees
+      rot: t & 8 ? (+o.angle || 0) : (+o.angle || 0) * 0.01,
+      // a tag also reports its four corners, which show the skew a box can't
+      quad: o.x0 === undefined ? null
+            : [0, 1, 2, 3].map(k => `${+o['x' + k]},${+o['y' + k]}`).join(' '),
+      // same polynomial the Python client uses to turn frame pixels into a bearing
+      bearing: -34.656 + cx * 0.22539 + cy * 0.011526
+               + cx * cx * -0.000042011 + cx * cy * 0.000010433 + cy * cy * -0.00007073,
+    });
+  }
+  return out;
+}
+
+function visionRender(objs) {
+  for (const k in SIGS) $('n_' + k).textContent = objs.filter(o => o.kind === k).length;
+
+  const shown = objs.filter(o => SIGS[o.kind] && sigOn(o.kind));
+  const name = o => o.kind === 'tag' ? `TAG ${o.id}` : SIGS[o.kind].label;
+
+  $('vlay').innerHTML = !body.classList.contains('vlay') ? '' : shown.map(o => {
+    const c = SIGS[o.kind].c;
+    return (o.quad ? `<polygon points="${o.quad}" fill="none" stroke="${c}" stroke-width="1.6"/>`
+                   : `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="none" stroke="${c}" stroke-width="1.6"/>`)
+         + `<text x="${o.x}" y="${Math.max(9, o.y - 3)}" fill="${c}">${name(o)}</text>`;
+  }).join('');
+
+  if (!$('vdetail').open) return;          // nobody is reading the rows — don't build them
+  $('vempty').hidden = shown.length > 0;
+  $('vrows').innerHTML = shown.map(o => `<tr>
+      <td class="k"><i style="background:${SIGS[o.kind].c}"></i>${name(o)}</td>
+      <td>${Math.round(o.cx)}, ${Math.round(o.cy)}</td>
+      <td>${o.x}, ${o.y}</td>
+      <td>${o.w} × ${o.h}</td>
+      <td>${o.bearing.toFixed(1)}°</td>
+      <td>${o.rot.toFixed(1)}°</td>
+      <td>${o.score ?? '—'}</td>
+    </tr>`).join('');
+}
+
+// Push the checkbox state upstream so unwanted families are never detected.
+// One request at a time — ws_cmd is request/response and the robot answers in order.
+async function syncDetection(family) {
+  if (cmdWs?.readyState !== 1) return;
+  if (family === 'tag') await quiet(send({ cmd_id: 'tag_detection', b_enable: sigOn('tag') }));
+  else await quiet(send({ cmd_id: 'model_detection', b_enable: MODEL_SIGS.some(sigOn) }));
+}
+
+$('sigs').onchange = e => syncDetection(e.target.dataset.sig === 'tag' ? 'tag' : 'model');
+$('vToggle').onchange = e => {
+  body.classList.toggle('vlay', e.target.checked);
+  if (!e.target.checked) { $('vlay').innerHTML = ''; return; }
+  // boxes over an empty plate look like the annotation killed the feed — it didn't,
+  // the feed is simply off, and only the plate can say so
+  if (!body.classList.contains('streaming') && body.classList.contains('live'))
+    placeholder('标注已开启，画面未开启',
+                '标注走的是状态包，不需要视频流。想同时看画面，请拨动左边的「画面」开关。',
+                '已连接', '仅标注');
+};
 
 /* ── commands ─────────────────────────────────────────── */
 
@@ -733,10 +939,16 @@ $('speed').oninput = e => $('speedv').textContent = e.target.value + ' mm/s';
 $('turn').oninput  = e => $('turnv').textContent  = e.target.value + ' °/s';
 
 $('camToggle').onchange = e => {
-  if (e.target.checked) { imgWs?.send(new Uint8Array([1])); return; }
-  imgWs?.send(new Uint8Array([0]));
+  if (e.target.checked) {
+    if (!imgWs || imgWs.readyState > 1) openImg();        // never opened, or the last one died
+    else if (imgWs.readyState === 1) imgWs.send(new Uint8Array([1]));
+    return;                                              // still CONNECTING: onopen starts it
+  }
+  if (imgWs?.readyState === 1) imgWs.send(new Uint8Array([0]));
   body.classList.remove('streaming');
-  placeholder('画面已关闭', '把图注条上的「画面」开关拨开即可恢复。', '已连接', '画面已关闭');
+  placeholder('画面已关闭', body.classList.contains('vlay')
+    ? '标注还在跑，画的是同一批数据。把「画面」开关拨开即可恢复实时画面。'
+    : '把图注条上的「画面」开关拨开即可恢复。', '已连接', '画面已关闭');
 };
 
 $('ledOn').onclick = () => {
@@ -776,6 +988,7 @@ addEventListener('keyup', ev => {
   if (ev.key !== ' ') quiet(halt());
 });
 addEventListener('blur', () => { if (held) { held = null; quiet(halt()); } });
+addEventListener('pagehide', closeAll);   // a closed tab must stop the stream too
 
 /* Chrome 147+ gates local-network access (including WebSockets) behind a permission that is
    only granted to secure contexts. A plain-HTTP page on a public domain can never obtain it,
@@ -811,7 +1024,7 @@ if (new URLSearchParams(location.search).has('selftest')) {
   connect(); connect(); connect();
   const afterRetries = live();
 
-  const cmd = made[made.length - 2];
+  const cmd = made[made.length - 1];
   cmd.readyState = 1; cmd.onopen();
   cmd.readyState = 3; cmd.onclose({});
   const afterDrop = live();
@@ -819,9 +1032,24 @@ if (new URLSearchParams(location.search).has('selftest')) {
   window.WebSocket = Real;
   teardown(); setState(null, '未连接');
 
-  const ok = afterRetries <= 2 && afterDrop === 0;
+  // the parser turns a raw status block into what the overlay draws — check it too
+  const v = visionParse({
+    classnames: { count: 4, items: [{ index: 0, name: 'SportsBall' }, { index: 1, name: 'BlueBarrel' },
+                                    { index: 2, name: 'OrangeBarrel' }, { index: 3, name: 'Robot' }] },
+    objects: { count: 2, items: [
+      { type: 4, id: 1, originx: 100, originy: 60, width: 40, height: 50, score: 91 },
+      { type: 8, id: 7, originx: 10, originy: 10, width: 20, height: 20, angle: 12,
+        x0: 10, y0: 10, x1: 30, y1: 12, x2: 28, y2: 30, x3: 8, y3: 28 },
+      { type: 4, id: 3, originx: 0, originy: 0, width: 5, height: 5 },   // past count — must be ignored
+    ] },
+  });
+  const vOk = v.length === 2 && v[0].kind === 'BlueBarrel' && v[0].cx === 120 && v[0].cy === 85
+              && v[1].kind === 'tag' && v[1].rot === 12 && v[1].quad === '10,10 30,12 28,30 8,28'
+              && Math.abs(v[0].bearing + 7.6) < 0.1;      // 120,85 sits left of the frame centre
+
+  const ok = afterRetries <= 2 && afterDrop === 0 && vOk;
   const msg = `自检 ${ok ? '通过' : '失败'}：3 次重试后存活 ${afterRetries} 个（应 ≤2），` +
-              `断线后存活 ${afterDrop} 个（应 0）`;
+              `断线后存活 ${afterDrop} 个（应 0），视觉解析 ${vOk ? '正常' : '异常'}`;
   log(msg, !ok);
   (ok ? console.log : console.error)(msg);
 }
