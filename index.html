@@ -322,10 +322,21 @@ body.tab-scr .ph, body.tab-scr #view, body.tab-scr #vlay { display: none; }
 .scrBox { position: relative; height: 100%; aspect-ratio: 1; max-width: 100%; }
 #scrCv { width: 100%; height: 100%; display: block; background: #000;
   image-rendering: pixelated; touch-action: none; cursor: crosshair; }
-body.imgmode #scrCv { cursor: grab; }
+body.m-img #scrCv { cursor: grab; }
+body.m-emo #scrCv { cursor: default; }
+/* the emoji is drawn by the robot over everything else on its screen — the plate
+   mirrors that by covering the canvas rather than replacing it */
+#emoView { position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; display: none; pointer-events: none; }
+.emoLbl { position: absolute; inset: 0; display: none; place-content: center;
+  font: 500 14px/1 var(--mono); color: #fff; text-shadow: 0 0 8px #000;
+  pointer-events: none; }
+body.emo-on #emoView { display: block; }
+body.emo-on.emo-nopic #emoView { display: none; }
+body.emo-on.emo-nopic .emoLbl { display: grid; }
 #scrMask { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
-.seg { display: grid; grid-template-columns: 1fr 1fr; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
 .segb {
   appearance: none; background: var(--paper); cursor: pointer;
   border: 1px solid var(--rule); height: 30px; color: var(--ink2);
@@ -335,7 +346,22 @@ body.imgmode #scrCv { cursor: grab; }
 .segb.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .segb:focus-visible { outline: 2px solid var(--press); outline-offset: 2px; }
 
-body:not(.imgmode) .forImg, body.imgmode .forPen { display: none; }
+body:not(.m-pen) .forPen, body:not(.m-img) .forImg, body:not(.m-emo) .forEmo { display: none; }
+
+/* 36 emoji. Previews come from api.vex.com, so they are missing whenever there is no
+   internet — on the robot's own AP, for one — and the tile falls back to its name. */
+.emos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+  max-height: 264px; overflow-y: auto; margin-top: 9px; }
+.emo {
+  appearance: none; background: var(--paper); border: 1px solid var(--rule);
+  padding: 4px 2px 4px; cursor: pointer; min-width: 0;
+  display: grid; justify-items: center; align-content: center; gap: 3px;
+  font: 400 10px/1.2 var(--mono); color: var(--ink2);
+}
+.emo img { width: 32px; height: 32px; display: block; }
+.emo span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emo.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.emo:focus-visible { outline: 2px solid var(--press); outline-offset: 2px; }
 .cost { margin: 9px 0 7px; font: 400 10.5px/1.5 var(--mono); color: var(--ink2); }
 .bar { height: 3px; background: var(--rule-2); margin-top: 7px; }
 .bar i { display: block; height: 100%; background: var(--press); width: 0; }
@@ -537,11 +563,14 @@ details.log[open] summary .icon { transform: rotate(90deg); }
               <div class="scr">
                 <div class="scrBox">
                   <canvas id="scrCv"></canvas>
+                  <img id="emoView" alt="">
+                  <div class="emoLbl" id="emoLbl"></div>
                   <svg id="scrMask" viewBox="0 0 240 240" aria-hidden="true">
                     <defs>
                       <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse"
                                patternTransform="rotate(45)">
-                        <line x1="0" y1="0" x2="0" y2="7" stroke="#000000B8" stroke-width="4"/>
+                        <rect width="7" height="7" fill="#00000073"/>
+                        <line x1="0" y1="0" x2="0" y2="7" stroke="#FFFFFF38" stroke-width="3.5"/>
                       </pattern>
                       <mask id="corners">
                         <rect width="240" height="240" fill="#fff"/>
@@ -633,6 +662,7 @@ details.log[open] summary .icon { transform: rotate(90deg); }
           <div class="seg">
             <button class="segb on" id="mPen">画笔</button>
             <button class="segb" id="mImg">图片</button>
+            <button class="segb" id="mEmo">表情</button>
           </div>
 
           <div class="forPen">
@@ -670,6 +700,18 @@ details.log[open] summary .icon { transform: rotate(90deg); }
               <button class="btn" id="scrStop" disabled>取消</button>
             </div>
             <div class="bar"><i id="barFill"></i></div>
+          </div>
+
+          <div class="forEmo">
+            <div class="seg" id="looks" style="margin-top:9px">
+              <button class="segb on" data-look="0">正面</button>
+              <button class="segb" data-look="1">向左</button>
+              <button class="segb" data-look="2">向右</button>
+            </div>
+            <div class="emos" id="emos"></div>
+            <button class="btn need" id="emoOff" disabled style="width:100%;margin-top:7px">隐藏表情</button>
+            <p class="keys">表情盖在绘制内容之上。画笔、图片、清屏会先自动隐藏表情，
+              否则命令发出去了屏幕也不动。</p>
           </div>
 
           <div class="row2" style="margin-top:11px">
@@ -774,6 +816,7 @@ function setState(cls, text) {
   $('disconnect').disabled = !live && cls !== 'busy';
   document.querySelectorAll('.need').forEach(b => b.disabled = !live);
   $('scrSend').disabled = !live || busy || !scrOps.length;
+  $('emoOff').disabled = !live || emoOn === null;
 }
 
 function connect() {
@@ -983,8 +1026,8 @@ async function runOps(ops) {
   $('barFill').style.width = '0';
   busy = false; $('scrStop').disabled = true;
   $('scrSend').disabled = !body.classList.contains('live') || !scrOps.length;
-  if (i) log(`屏幕：发出 ${i}/${ops.length} 条，用时 ${(dt / 1000).toFixed(1)}s` +
-             (abort ? '（已取消）' : ''), abort || i < ops.length);
+  if (i && ops.length > 8) log(`屏幕：发出 ${i}/${ops.length} 条，用时 ${(dt / 1000).toFixed(1)}s` +
+                               (abort ? '（已取消）' : ''), abort || i < ops.length);
   showCost();
 }
 
@@ -999,8 +1042,9 @@ const showCost = () => $('cost').textContent = !scrOps.length
 let stroke = null, pan = null;
 
 scrCv.onpointerdown = e => {
+  if (body.classList.contains('m-emo')) return;
   scrCv.setPointerCapture(e.pointerId);
-  if (body.classList.contains('imgmode')) { pan = { ...scrPos(e), ox: img.ox, oy: img.oy }; return; }
+  if (body.classList.contains('m-img')) { pan = { ...scrPos(e), ox: img.ox, oy: img.oy }; return; }
   const p = scrPos(e);
   const col = $('penTool').value === 'eraser' ? $('bgColor').value : $('penColor').value;
   stroke = { pts: [p], col, w: +$('penW').value };
@@ -1029,12 +1073,12 @@ scrCv.onpointerup = () => {
   const s = stroke; stroke = null;
   if (s.pts.length < 2 || cmdWs?.readyState !== 1) return;
   const r = Math.round;
-  quiet(runOps([
+  quiet(runOps(drawOps([
     { cmd_id: 'lcd_set_pen_width', width: s.w },
     { cmd_id: 'lcd_set_pen_color', ...rgb(s.col) },
     ...s.pts.slice(1).map((p, i) => ({ cmd_id: 'lcd_draw_line',
       x1: r(s.pts[i].x), y1: r(s.pts[i].y), x2: r(p.x), y2: r(p.y) })),
-  ]));
+  ])));
 };
 scrCv.onpointercancel = scrCv.onpointerup;
 
@@ -1153,6 +1197,76 @@ function encode(idx, pal) {
   return ops;
 }
 
+/* ── emoji: the robot has 36 built in, one command each ─── */
+
+// index === the robot's EmojiType value, and the preview file is `${i+1}-${name}.png`
+const EMOJI = ['EXCITED', 'CONFIDENT', 'SILLY', 'AMAZED', 'STRONG', 'THRILLED', 'HAPPY',
+  'PROUD', 'LAUGHING', 'OPTIMISTIC', 'DETERMINED', 'AFFECTIONATE', 'CALM', 'QUIET', 'SHY',
+  'CHEERFUL', 'LOVED', 'SURPRISED', 'THINKING', 'TIRED', 'CONFUSED', 'BORED', 'EMBARRASSED',
+  'WORRIED', 'SAD', 'SICK', 'DISAPPOINTED', 'NERVOUS', 'ANNOYED', 'STRESSED', 'ANGRY',
+  'FRUSTRATED', 'JEALOUS', 'SHOCKED', 'FEAR', 'DISGUST'];
+const EMOJI_CN = ['兴奋', '自信', '调皮', '惊叹', '强壮', '激动', '开心', '得意', '大笑',
+  '乐观', '坚定', '喜爱', '平静', '安静', '害羞', '愉快', '被爱', '惊讶', '思考', '困倦',
+  '困惑', '无聊', '尴尬', '担心', '难过', '生病', '失望', '紧张', '烦躁', '压力', '生气',
+  '沮丧', '嫉妒', '震惊', '害怕', '厌恶'];
+const LOOK_CN = ['正面', '向左', '向右'];
+const emoUrl = i => `https://api.vex.com/aim/_images/${i + 1}-${EMOJI[i].toLowerCase()}.png`;
+
+let emoOn = null, emoLook = 0;
+
+$('emos').innerHTML = EMOJI.map((n, i) => `
+  <button class="emo" data-i="${i}" title="${n}">
+    <img src="${emoUrl(i)}" alt="" loading="lazy" onerror="this.remove()">
+    <span>${EMOJI_CN[i]}</span>
+  </button>`).join('');
+
+$('emoView').onload  = () => body.classList.remove('emo-nopic');
+$('emoView').onerror = () => body.classList.add('emo-nopic');   // no internet: show the name
+
+function paintEmoji() {
+  const on = emoOn !== null;
+  body.classList.toggle('emo-on', on);
+  [...$('emos').children].forEach((b, k) => b.classList.toggle('on', on && k === emoOn));
+  $('emoOff').disabled = !on || !body.classList.contains('live');
+  $('scrMeta').textContent = on
+    ? `表情 · ${EMOJI_CN[emoOn]} · ${LOOK_CN[emoLook]}`
+    : '240 × 240 · 可见区 r=120';
+  if (!on) return;
+  $('emoLbl').textContent = `${EMOJI_CN[emoOn]} · ${LOOK_CN[emoLook]}`;
+  const u = emoUrl(emoOn);
+  if ($('emoView').getAttribute('src') !== u) $('emoView').src = u;
+}
+
+// The emoji covers whatever the screen has drawn, so anything that draws has to clear it
+// first — otherwise the commands land and the screen visibly does nothing.
+function drawOps(ops) {
+  if (emoOn === null) return ops;
+  emoOn = null; paintEmoji();
+  return [{ cmd_id: 'hide_emoji' }, ...ops];
+}
+
+$('emos').onclick = e => {
+  const b = e.target.closest('.emo');
+  if (!b || busy) return;
+  emoOn = +b.dataset.i; paintEmoji();
+  quiet(runOps([{ cmd_id: 'show_emoji', name: emoOn, look: emoLook }]));
+};
+
+$('looks').onclick = e => {
+  const b = e.target.closest('.segb');
+  if (!b || busy) return;
+  emoLook = +b.dataset.look;
+  [...$('looks').children].forEach(x => x.classList.toggle('on', x === b));
+  paintEmoji();
+  if (emoOn !== null) quiet(runOps([{ cmd_id: 'show_emoji', name: emoOn, look: emoLook }]));
+};
+
+$('emoOff').onclick = () => {
+  if (busy) return;
+  emoOn = null; paintEmoji();
+  quiet(runOps([{ cmd_id: 'hide_emoji' }]));
+};
+
 /* ── wiring ─────────────────────────────────────────────── */
 
 const setTab = scr => {
@@ -1164,12 +1278,15 @@ const setTab = scr => {
 $('tabCam').onclick = () => setTab(false);
 $('tabScr').onclick = () => setTab(true);
 
-const setMode = im => {
-  body.classList.toggle('imgmode', im);
-  $('mImg').classList.toggle('on', im); $('mPen').classList.toggle('on', !im);
+const MODES = { pen: 'mPen', img: 'mImg', emo: 'mEmo' };
+const setMode = m => {
+  for (const k in MODES) {
+    body.classList.toggle('m-' + k, k === m);
+    $(MODES[k]).classList.toggle('on', k === m);
+  }
 };
-$('mPen').onclick = () => setMode(false);
-$('mImg').onclick = () => setMode(true);
+for (const k in MODES) $(MODES[k]).onclick = () => setMode(k);
+setMode('pen');
 
 let rq;
 const reRender = () => { cancelAnimationFrame(rq); rq = requestAnimationFrame(renderImage); };
@@ -1179,12 +1296,12 @@ $('nCol').oninput = e => { $('nColv').textContent = e.target.value; reRender(); 
 $('zoom').oninput = e => { $('zoomv').textContent = e.target.value + '%'; reRender(); };
 $('bgColor').oninput = () => { if (img.el) reRender(); };
 
-$('scrSend').onclick = () => quiet(runOps(scrOps));
+$('scrSend').onclick = () => quiet(runOps(drawOps(scrOps)));
 $('scrStop').onclick = () => { abort = true; };
 $('scrClear').onclick = () => {
   scrFill($('bgColor').value);
   scrOps = []; showCost();
-  quiet(runOps([{ cmd_id: 'lcd_clear_screen', ...rgb($('bgColor').value) }]));
+  quiet(runOps(drawOps([{ cmd_id: 'lcd_clear_screen', ...rgb($('bgColor').value) }])));
 };
 
 /* ── AI vision ────────────────────────────────────────────
@@ -1425,7 +1542,8 @@ if (new URLSearchParams(location.search).has('selftest')) {
   // A body state class sharing a name with an element class is how `.scr { display: none }`
   // once matched <body> and took the whole page with it. Every state must leave body visible.
   const keep = body.className;
-  const bOk = ['tab-scr', 'imgmode', 'vlay', 'streaming', 'live', 'busy', 'pristine'].every(c => {
+  const bOk = ['tab-scr', 'm-pen', 'm-img', 'm-emo', 'emo-on', 'emo-nopic',
+               'vlay', 'streaming', 'live', 'busy', 'pristine'].every(c => {
     body.className = c;
     return getComputedStyle(body).display !== 'none' && body.offsetWidth > 0;
   });
